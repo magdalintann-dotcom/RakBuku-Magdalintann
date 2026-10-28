@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hey, pinjamintan!</title>
+<meta name="description" content="Katalog buku pribadi yang bisa kamu sewa. Cek mana yang bisa dipinjam dan mana yang sedang dipinjam.">
+<script>
+/* ==============================================================
+   PENGATURAN: tempel link CSV dari Google Sheets di antara tanda kutip.
+   Cara dapat link: File > Bagikan > Publikasikan ke web > pilih tab > CSV
+   ============================================================== */
+var LINK_BUKU   = "";   // tab "Buku"   (wajib)
+var LINK_INFO   = "";   // tab "Info"   (wajib)
+var LINK_JADWAL = "";   // tab "Jadwal COD Buku di Jogja" (boleh dikosongkan)
+var JUDUL_JADWAL = "Jadwal COD di Jogja";
+</script>
+<style>
+/* Layout: Notion-style page — optional cover, big title, quote, two columns of toggles, contact line,
+   then two gallery databases (Bisa Dipinjam / Sedang Dipinjam & Dibaca) with a page-peek modal. White only, by request. */
+:root{
+  color-scheme:light;
+  --bg:#FFFFFF; --ink:#37352F; --muted:#787774; --faint:#9B9A97;
+  --line:#E9E9E7; --hover:#F7F7F5; --soft:#F7F6F3;
+  --hl:#FDEBEC;                      /* pink highlight on toggle titles */
+  --t-gray:#E3E2E0; --t-brown:#EEE0DA; --t-orange:#FADEC9; --t-yellow:#FDECC8;
+  --t-green:#DBEDDB; --t-blue:#D3E5EF; --t-purple:#E8DEEE; --t-pink:#F5E0E9; --t-red:#FFE2DD;
+  --ok-ink:#1C3829; --lent-ink:#5D1715; --read-ink:#412454;
+  --accent:#2383E2;
+  --f-ui:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji";
+  --f-serif:"Lyon-Text",Georgia,ui-serif,serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:16px;line-height:1.5;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);-webkit-font-smoothing:antialiased}
+img{max-width:100%}
+[hidden]{display:none!important}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit;text-decoration:underline;text-decoration-color:rgba(55,53,47,.4);text-underline-offset:2px}
+a:hover{text-decoration-color:var(--ink)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+.cover-banner{height:clamp(140px,26vw,280px);background:var(--soft) center/cover no-repeat}
+.page{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:56px 96px}
+@media (min-width:900px){.page{padding-left:96px;padding-right:96px}}
+.has-banner .page{padding-top:32px}
+
+h1{font-size:clamp(32px,5.5vw,40px);font-weight:700;line-height:1.2;letter-spacing:-.01em;margin:0 0 4px;text-wrap:balance}
+h2{font-size:24px;font-weight:600;line-height:1.3;margin:0;text-wrap:balance}
+.quote{border-left:3px solid currentColor;padding:2px 14px;margin:20px 0 8px;font-size:18px;font-style:italic;color:var(--muted);white-space:pre-line}
+
+.notice{background:var(--t-yellow);border-radius:4px;padding:12px 14px;font-size:14px;margin-bottom:24px;display:flex;gap:10px}
+
+/* toggles */
+.toggles{display:grid;grid-template-columns:1fr 1fr;gap:4px 48px;margin-top:20px;align-items:start}
+.tcol{display:flex;flex-direction:column;gap:4px;min-width:0}
+@media (max-width:720px){.toggles{grid-template-columns:1fr}}
+details{min-width:0}
+summary{list-style:none;display:flex;align-items:center;gap:6px;padding:4px 2px;border-radius:4px;cursor:pointer;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary:hover{background:var(--hover)}
+.tri{width:20px;height:20px;display:grid;place-items:center;flex:none;transition:transform .15s ease;color:var(--ink)}
+details[open] > summary .tri{transform:rotate(90deg)}
+.tt{background:var(--hl);padding:0 3px;border-radius:3px;font-weight:500;text-decoration:underline;text-decoration-color:rgba(55,53,47,.3);text-underline-offset:3px}
+.tbody{padding:4px 0 14px 28px;font-size:15.5px}
+.tbody ul{margin:4px 0;padding-left:22px}
+.tbody li{margin:3px 0;padding-left:2px}
+.tbody p{margin:6px 0}
+.tbl-wrap{overflow-x:auto;margin-top:6px}
+table{border-collapse:collapse;font-size:14px;min-width:100%}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500;background:var(--soft)}
+
+.contact{margin:28px 0 0;font-size:20px;font-weight:600}
+.contact span{font-weight:400}
+
+/* database */
+.db{margin-top:44px}
+.dbhead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:16px}
+.dbhead h2 .n{color:var(--faint);font-weight:400;font-size:18px;margin-left:6px;font-variant-numeric:tabular-nums}
+.searchbox{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:5px 10px;background:var(--bg);flex:0 1 280px;min-width:0}
+.searchbox svg{flex:none;color:var(--faint)}
+.searchbox input{border:0;outline:0;background:none;min-width:0;width:100%;font-size:14px}
+.views{display:flex;gap:4px;flex-wrap:wrap}
+.view{border:0;background:none;padding:4px 10px;border-radius:999px;font-size:14px;color:var(--muted);font-weight:500}
+.view[aria-pressed="true"]{background:var(--t-gray);color:var(--ink)}
+.view:hover{background:var(--hover)}
+
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:16px}
+@media (max-width:440px){.gallery{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
+.card{display:flex;flex-direction:column;text-align:left;background:var(--bg);border:0;padding:0;border-radius:6px;overflow:hidden;min-width:0;
+  box-shadow:rgba(15,15,15,.07) 0 0 0 1px,rgba(15,15,15,.06) 0 2px 4px;transition:background .12s ease}
+.card:hover{background:var(--hover)}
+.thumb{position:relative;aspect-ratio:3/4;max-width:100%;background:var(--soft);border-bottom:1px solid var(--line);overflow:hidden}
+.thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;text-align:center;color:var(--faint)}
+.ph b{font-family:var(--f-serif);font-weight:400;font-style:italic;font-size:15px;line-height:1.3;color:var(--muted);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.thumb.loaded .ph{display:none}
+.cbody{padding:10px 10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ctitle{font-size:14px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.cauthor{font-size:12.5px;color:var(--muted);line-height:1.3}
+.tags{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.tag{font-size:12px;line-height:18px;padding:0 6px;border-radius:3px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.code{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.st-ok{background:var(--t-green);color:var(--ok-ink)}
+.st-lent{background:var(--t-red);color:var(--lent-ink)}
+.st-read{background:var(--t-purple);color:var(--read-ink)}
+.g0{background:var(--t-gray)}.g1{background:var(--t-brown)}.g2{background:var(--t-orange)}.g3{background:var(--t-yellow)}
+.g4{background:var(--t-blue)}.g5{background:var(--t-pink)}.g6{background:var(--t-green)}.g7{background:var(--t-purple)}
+.empty{color:var(--faint);font-size:14px;padding:18px 2px}
+.more{margin-top:14px;border:0;background:none;color:var(--muted);font-size:14px;padding:6px 8px;border-radius:4px}
+.more:hover{background:var(--hover)}
+
+/* peek */
+dialog{border:0;border-radius:10px;padding:0;width:min(760px,calc(100vw - 24px));max-height:calc(100dvh - 32px);
+  box-shadow:rgba(15,15,15,.05) 0 0 0 1px,rgba(15,15,15,.1) 0 5px 10px,rgba(15,15,15,.2) 0 15px 40px;color:var(--ink);background:var(--bg)}
+dialog::backdrop{background:rgba(15,15,15,.4)}
+.peek{display:grid;grid-template-columns:minmax(0,240px) minmax(0,1fr);gap:28px;padding:28px}
+@media (max-width:600px){.peek{grid-template-columns:1fr;padding:20px;gap:18px}.peek .thumb{max-width:220px}}
+.peek .thumb{border-radius:6px;border:1px solid var(--line)}
+.peek h2{font-size:28px;font-weight:700;line-height:1.2}
+.props{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;margin:16px 0 18px;font-size:14px;align-items:baseline}
+.props dt{color:var(--muted)}
+.props dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.callout{display:flex;gap:10px;background:var(--soft);border-radius:4px;padding:14px 16px;font-size:14.5px}
+.callout p{margin:0}
+.callout code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(135,131,120,.15);color:#EB5757;padding:1px 5px;border-radius:3px;font-size:13.5px}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.btn{border:1px solid var(--line);background:var(--bg);border-radius:4px;padding:6px 12px;font-size:14px;font-weight:500}
+.btn:hover{background:var(--hover)}
+.close{position:absolute;top:10px;right:10px;width:30px;height:30px;border:0;border-radius:4px;background:none;color:var(--muted);font-size:20px;line-height:1}
+.close:hover{background:var(--hover)}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:6px;font-size:14px;z-index:9;max-width:calc(100vw - 32px)}
+footer{margin-top:56px;color:var(--faint);font-size:13px}
+@media (prefers-reduced-motion: reduce){.tri,.card{transition:none}}
+</style>
+</head>
+<body>
+<div id="banner" class="cover-banner" hidden></div>
+<div class="page">
+  <div id="notice" class="notice" hidden></div>
+
+  <h1 id="title">Hey, pinjamintan!</h1>
+  <p id="quote" class="quote" hidden></p>
+
+  <div id="toggles" class="toggles"></div>
+  <p id="contact" class="contact" hidden></p>
+
+  <section class="db" aria-labelledby="h-ada">
+    <div class="dbhead">
+      <h2 id="h-ada">Bisa Dipinjam<span class="n" id="n-ada"></span></h2>
+      <label class="searchbox">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input id="q" type="search" placeholder="Cari judul, penulis, atau kode" aria-label="Cari buku">
+      </label>
+    </div>
+    <div id="g-ada" class="gallery"></div>
+    <button id="more-ada" class="more" type="button" hidden></button>
+  </section>
+
+  <section class="db" aria-labelledby="h-pinjam">
+    <div class="dbhead">
+      <h2 id="h-pinjam">Sedang Dipinjam / Dibaca<span class="n" id="n-pinjam"></span></h2>
+      <div class="views" role="group" aria-label="Saring">
+        <button class="view" type="button" data-v="semua" aria-pressed="true">Semua</button>
+        <button class="view" type="button" data-v="pinjam" aria-pressed="false">Dipinjam</button>
+        <button class="view" type="button" data-v="baca" aria-pressed="false">Dibaca Intan</button>
+      </div>
+    </div>
+    <div id="g-pinjam" class="gallery"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<dialog id="peek"></dialog>
+
+<script>
+(function(){
+  /* ---------- contoh (dipakai kalau link belum diisi) ---------- */
+  var EXAMPLE_INFO=[
+    ["Judul halaman","Hey, pinjamintan!"],
+    ["Kalimat pembuka","Hai! Mau baca novel tanpa harus membeli? Bisa pinjam di aku ya. Ini semua adalah koleksi buku pribadiku yang bisa kamu sewa.\nCek katalog untuk melihat buku yang tersedia. Ketersediaan dapat berubah, jadi konfirmasi dulu sebelum memesan."],
+    ["Tarif dan Durasi","Rp8.000 per buku untuk 7 hari\nRp30.000 per buku untuk 30 hari\nMaksimal 3 buku per orang\nLama pinjam maksimal 30 hari -- kalau mau perpanjangan harus menghubungi admin ya"],
+    ["Cara pinjam","Hubungi WhatsApp 088237125592.\nKirim judul atau kode buku yang ingin dipinjam dan pilih durasi sewa.\nTunggu konfirmasi ketersediaan dan total pembayaran.\nAmbil buku di area Yogyakarta atau pilih pengiriman (jika di luar Yogyakarta)."],
+    ["Kontak","IG: @magdalintann"]
+  ];
+  var EXAMPLE_BOOKS=[
+    ["KLV001","Tuesday with Morrie (English)","Mitch Albom","Memoir / Non-fiction"],
+    ["KLV002","Aksi Massa","Tan Malaka","Non-fiction"],
+    ["KLV003","Tan Malaka: Bapak Republik yang Dilupakan","Tempo","Non-fiction / History"],
+    ["KLV004","Perang Troia","Menelaos Stefanides","Mythology / Folklore"],
+    ["KLV005","Odysseus","Menelaos Stefanides","Mythology / Folklore"],
+    ["KLV006","The Song of Achilles","Madeline Miller","Mythology / Folklore"],
+    ["KLV007","The Fifth Mountain","Paulo Coelho","Philosophical Fiction"],
+    ["KLV008","Si Lelaki yang Memiliki Semua-Muanya","Miguel Angel Asturias","Magical Realism / Surrealist Fiction"],
+    ["KLV009","Toko Buku Abadi","Yudhi Herwibowo","Anthological / Interconnected Fiction"],
+    ["KLV010","We Are Nowhere and Its Wow","Mikael Johani","Poetry"]
+  ].map(function(r,i){return {code:r[0],title:r[1],author:r[2],genre:r[3],cover:"",status:i===1?"Dipinjam":"Ada di rumah",due:i===1?"2026-11-10":"",reading:i===5}});
+
+  var PAGE=60;                       // jumlah kartu pertama di "Bisa Dipinjam"
+  var books=[], info=[], contactText="", ui={q:"",v:"semua",limit:PAGE};
+  var $=function(id){return document.getElementById(id)};
+
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+
+  /* @instagram dan nomor WA jadi link (dipanggil pada teks yang sudah di-escape) */
+  function linkify(h){
+    h=h.replace(/(^|[\s:(])@([A-Za-z0-9._]{2,30})/g,function(m,pre,u){u=u.replace(/\.+$/,"");return pre+'<a href="https://instagram.com/'+u+'" target="_blank" rel="noopener">@'+u+'</a>'});
+    h=h.replace(/(\+?62|0)(8[\d\- ]{7,14}\d)/g,function(m,cc,rest){var d=rest.replace(/\D/g,"");return '<a href="https://wa.me/62'+d+'" target="_blank" rel="noopener">'+m+'</a>'});
+    return h;
+  }
+  /* teks dari spreadsheet → paragraf & bullet ala Notion */
+  function richText(t){
+    var blocks=String(t||"").replace(/\r/g,"").split(/\n\s*\n/);
+    return blocks.map(function(b){
+      var lines=b.split("\n").map(function(l){return l.trim()}).filter(Boolean);
+      if(!lines.length)return "";
+      if(lines.length===1&&!/^[-•*]\s/.test(lines[0]))return "<p>"+linkify(esc(lines[0]))+"</p>";
+      return "<ul>"+lines.map(function(l){return "<li>"+linkify(esc(l.replace(/^[-•*]\s*/,"")))+"</li>"}).join("")+"</ul>";
+    }).join("");
+  }
+
+  function parseCSV(t){
+    var rows=[],row=[],cell="",q=false;
+    for(var i=0;i<t.length;i++){
+      var c=t[i];
+      if(q){ if(c==='"'){ if(t[i+1]==='"'){cell+='"';i++} else q=false } else cell+=c }
+      else if(c==='"') q=true;
+      else if(c===','){row.push(cell);cell=""}
+      else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell=""}
+      else if(c!=='\r') cell+=c;
+    }
+    if(cell!==""||row.length){row.push(cell);rows.push(row)}
+    return rows;
+  }
+  function findCol(h,keys){
+    for(var k=0;k<keys.length;k++)for(var i=0;i<h.length;i++)if(h[i].trim().toLowerCase().indexOf(keys[k])===0)return i;
+    return -1;
+  }
+  function toBooks(rows){
+    var h=rows[0]||[];
+    var c={code:findCol(h,["kode","no"]),title:findCol(h,["judul"]),author:findCol(h,["penulis"]),genre:findCol(h,["genre"]),
+           cover:findCol(h,["link foto","foto","sampul"]),status:findCol(h,["status"]),due:findCol(h,["perkiraan","tenggat"]),reading:findCol(h,["lagi aku baca","sedang dibaca","dibaca"])};
+    return rows.slice(1).map(function(r){
+      var o={};for(var k in c)o[k]=c[k]>=0?String(r[c[k]]||"").trim():"";
+      o.reading=/^(ya|yes|y|true|v|✓|x)$/i.test(o.reading);
+      return o;
+    }).filter(function(b){return b.title});
+  }
+  function toInfo(rows){return rows.slice(1).filter(function(r){return r[0]&&r[0].trim()&&r[0].trim().toLowerCase()!=="bagian"}).map(function(r){return [r[0].trim(),(r[1]||"").trim()]})}
+
+  function imgUrl(u){
+    if(!u)return "";
+    var m=u.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=|thumbnail\?id=)([\w-]+)/);
+    if(m)return "https://drive.google.com/thumbnail?id="+m[1]+"&sz=w1000";
+    return /^https?:\/\//.test(u)?u:"sampul/"+u;
+  }
+  function coverSrc(b){return imgUrl(b.cover)||(b.code?"sampul/"+encodeURIComponent(b.code)+".jpg":"")}
+  function hashClass(s){var h=0;for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return "g"+(Math.abs(h)%8)}
+  function state(b){return b.reading?"read":(/pinjam/i.test(b.status)?"lent":"ok")}
+  function fmtDate(d){if(!d)return "";var x=new Date(d+"T00:00:00");if(isNaN(x))return d;return x.toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"})}
+  function statusTag(b){
+    var s=state(b);
+    if(s==="read")return '<span class="tag st-read">Sedang dibaca Intan</span>';
+    if(s==="lent")return '<span class="tag st-lent">Dipinjam'+(b.due?' · kembali '+esc(fmtDate(b.due).replace(/ \d{4}$/,"")):"")+'</span>';
+    return '<span class="tag st-ok">Bisa dipinjam</span>';
+  }
+
+  /* ---------- halaman ---------- */
+  function key(k){return k.toLowerCase()}
+  function renderInfo(){
+    var get=function(name){for(var i=0;i<info.length;i++)if(key(info[i][0]).indexOf(name)===0)return info[i][1];return ""};
+    var title=get("judul halaman")||get("nama rak")||"Rak Buku";
+    $("title").textContent=title; document.title=title;
+    var q=get("kalimat pembuka"); $("quote").textContent=q; $("quote").hidden=!q;
+    var banner=get("foto banner");
+    if(banner){$("banner").style.backgroundImage='url("'+imgUrl(banner).replace(/"/g,"%22")+'")';$("banner").hidden=false;document.body.classList.add("has-banner")}
+    contactText=get("kontak");
+    $("contact").innerHTML=contactText?'Kontak: <span>'+linkify(esc(contactText))+'</span>':""; $("contact").hidden=!contactText;
+    var skip=["judul halaman","nama rak","kalimat pembuka","kontak","foto banner"];
+    var items=info.filter(function(r){var k=key(r[0]);return r[1]&&!skip.some(function(s){return k.indexOf(s)===0})});
+    var half=Math.ceil(items.length/2), html=function(r){return toggleHtml(r[0],richText(r[1]))};
+    $("toggles").innerHTML='<div class="tcol">'+items.slice(0,half).map(html).join("")+'</div><div class="tcol" id="tcol2">'+items.slice(half).map(html).join("")+'</div>';
+  }
+  function toggleHtml(label,body){
+    return '<details><summary><span class="tri" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2.5 1.2 8 5 2.5 8.8z" fill="currentColor"/></svg></span><span class="tt">'+esc(label)+'</span></summary><div class="tbody">'+body+'</div></details>';
+  }
+  function addTableToggle(rows){
+    rows=rows.filter(function(r){return r.some(function(c){return c.trim()})});
+    if(!rows.length)return;
+    var w=Math.max.apply(null,rows.map(function(r){return r.length}));
+    var used=[];for(var c=0;c<w;c++)used[c]=rows.some(function(r){return (r[c]||"").trim()});
+    var cells=function(r,tag){return r.map(function(v,i){return used[i]?"<"+tag+">"+linkify(esc(v||""))+"</"+tag+">":""}).join("")};
+    var t='<div class="tbl-wrap"><table><thead><tr>'+cells(rows[0],"th")+'</tr></thead><tbody>'+rows.slice(1).map(function(r){return "<tr>"+cells(r,"td")+"</tr>"}).join("")+'</tbody></table></div>';
+    ($("tcol2")||$("toggles")).insertAdjacentHTML("beforeend",toggleHtml(JUDUL_JADWAL,t));
+  }
+
+  function card(b){
+    var src=coverSrc(b);
+    return '<button class="card" type="button" data-code="'+esc(b.code||b.title)+'">'+
+      '<div class="thumb"><div class="ph"><svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5A1.5 1.5 0 0 0 6.5 21H19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><b>'+esc(b.title)+'</b></div>'+
+      (src?'<img alt="" loading="lazy" decoding="async" src="'+esc(src)+'" data-cover="1">':'')+'</div>'+
+      '<div class="cbody"><div class="ctitle">'+esc(b.title)+'</div>'+(b.author?'<div class="cauthor">'+esc(b.author)+'</div>':'')+
+      '<div class="tags">'+(state(b)!=="ok"?statusTag(b):"")+(b.genre?'<span class="tag '+hashClass(b.genre)+'">'+esc(b.genre)+'</span>':'')+'</div>'+
+      (b.code?'<div class="code">'+esc(b.code)+'</div>':'')+'</div></button>';
+  }
+  function match(b){var q=ui.q.trim().toLowerCase();return !q||(b.title+" "+b.author+" "+b.code+" "+b.genre).toLowerCase().indexOf(q)>=0}
+  function byCode(a,b){return (a.code||"").localeCompare(b.code||"",undefined,{numeric:true})||a.title.localeCompare(b.title)}
+
+  function renderBooks(){
+    var ada=books.filter(function(b){return state(b)==="ok"}).sort(byCode);
+    var out=books.filter(function(b){return state(b)!=="ok"}).sort(byCode);
+    $("n-ada").textContent=ada.length; $("n-pinjam").textContent=out.length;
+    var a=ada.filter(match), shown=a.slice(0,ui.limit);
+    $("g-ada").innerHTML=shown.length?shown.map(card).join(""):'<p class="empty">'+(ada.length?"Tidak ada yang cocok dengan pencarian.":"Semua buku sedang dipinjam.")+'</p>';
+    var rest=a.length-shown.length;
+    $("more-ada").hidden=rest<=0; $("more-ada").textContent="Tampilkan "+rest+" buku lagi";
+    var p=out.filter(match).filter(function(b){return ui.v==="semua"||(ui.v==="baca"?state(b)==="read":state(b)==="lent")});
+    $("g-pinjam").innerHTML=p.length?p.map(card).join(""):'<p class="empty">'+(ui.q?"Tidak ada yang cocok dengan pencarian.":"Belum ada buku di sini.")+'</p>';
+  }
+
+  /* gambar sampul: tampil kalau berhasil dimuat, kalau gagal pakai placeholder */
+  document.addEventListener("load",function(e){var t=e.target;if(t.dataset&&t.dataset.cover)t.parentNode.classList.add("loaded")},true);
+  document.addEventListener("error",function(e){var t=e.target;if(t.dataset&&t.dataset.cover)t.remove()},true);
+
+  /* ---------- peek ---------- */
+  function openPeek(code){
+    var b=books.filter(function(x){return (x.code||x.title)===code})[0];if(!b)return;
+    var src=coverSrc(b), s=state(b);
+    var how=s==="ok"
+      ? '<p>Mau pinjam buku ini? Kirim kode <code>'+esc(b.code||b.title)+'</code> ke '+(contactText?linkify(esc(contactText)):"Intan")+'.</p>'
+      : '<p>Buku ini sedang '+(s==="read"?"dibaca Intan":"dipinjam")+'. Kamu bisa tanya Intan untuk antre setelahnya.</p>';
+    $("peek").innerHTML='<button class="close" type="button" data-close aria-label="Tutup">×</button><div class="peek">'+
+      '<div class="thumb"><div class="ph"><b>'+esc(b.title)+'</b></div>'+(src?'<img alt="Sampul '+esc(b.title)+'" src="'+esc(src)+'" data-cover="1">':'')+'</div>'+
+      '<div><h2>'+esc(b.title)+'</h2><dl class="props">'+
+        (b.code?'<dt>Kode</dt><dd>'+esc(b.code)+'</dd>':'')+
+        (b.author?'<dt>Penulis</dt><dd>'+esc(b.author)+'</dd>':'')+
+        (b.genre?'<dt>Genre</dt><dd><span class="tag '+hashClass(b.genre)+'">'+esc(b.genre)+'</span></dd>':'')+
+        '<dt>Status</dt><dd>'+statusTag(b)+'</dd>'+
+        (s==="lent"&&b.due?'<dt>Perkiraan kembali</dt><dd>'+esc(fmtDate(b.due))+'</dd>':'')+
+      '</dl><div class="callout"><span aria-hidden="true">💡</span><div>'+how+
+        (b.code&&s==="ok"?'<div class="btnrow"><button class="btn" type="button" data-copy="'+esc(b.code)+'">Salin kode</button></div>':'')+
+      '</div></div></div></div>';
+    $("peek").showModal();
+  }
+  document.addEventListener("click",function(e){
+    var c=e.target.closest(".card"); if(c){openPeek(c.dataset.code);return}
+    if(e.target.closest("[data-close]")||e.target===$("peek")){$("peek").close();return}
+    var cp=e.target.closest("[data-copy]");
+    if(cp){var t=cp.dataset.copy;try{navigator.clipboard.writeText(t).then(function(){toast("Kode "+t+" disalin")},function(){toast("Kodenya: "+t)})}catch(err){toast("Kodenya: "+t)}}
+  });
+  $("q").addEventListener("input",function(){ui.q=this.value;ui.limit=PAGE;renderBooks()});
+  $("more-ada").addEventListener("click",function(){ui.limit+=1000;renderBooks()});
+  document.querySelector(".views").addEventListener("click",function(e){
+    var b=e.target.closest(".view");if(!b)return;ui.v=b.dataset.v;
+    this.querySelectorAll(".view").forEach(function(x){x.setAttribute("aria-pressed",x===b)});renderBooks();
+  });
+  var tt;function toast(m){var el=$("toast");if(!el){el=document.createElement("div");el.id="toast";el.className="toast";el.setAttribute("role","status");document.body.appendChild(el)}el.textContent=m;el.hidden=false;clearTimeout(tt);tt=setTimeout(function(){el.hidden=true},2600)}
+
+  /* ---------- muat data ---------- */
+  function get(u){return fetch(u+(u.indexOf("?")<0?"?":"&")+"_="+Date.now()).then(function(r){if(!r.ok)throw new Error(r.status);return r.text()})}
+  function showExample(msg){
+    info=EXAMPLE_INFO;books=EXAMPLE_BOOKS;renderInfo();renderBooks();
+    $("notice").innerHTML='<span aria-hidden="true">⚠️</span><span>'+esc(msg)+'</span>';$("notice").hidden=false;
+  }
+  if(!LINK_BUKU||!LINK_INFO){
+    showExample("Ini masih tampilan contoh. Isi LINK_BUKU dan LINK_INFO di bagian atas file index.html dengan link CSV dari Google Sheets.");
+  }else{
+    $("g-ada").innerHTML='<p class="empty">Memuat katalog…</p>';
+    Promise.all([get(LINK_BUKU),get(LINK_INFO)]).then(function(r){
+      books=toBooks(parseCSV(r[0])); info=toInfo(parseCSV(r[1]));
+      renderInfo(); renderBooks();
+      $("foot").textContent="Katalog ini diperbarui otomatis. Ketersediaan bisa berubah, konfirmasi dulu sebelum memesan.";
+      if(LINK_JADWAL)get(LINK_JADWAL).then(function(t){addTableToggle(parseCSV(t))}).catch(function(){});
+    }).catch(function(){
+      showExample("Katalog belum bisa dimuat. Pastikan tab Buku dan Info sudah dipublikasikan ke web sebagai CSV, lalu cek lagi linknya.");
+    });
+  }
+})();
+</script>
+</body>
+</html>
