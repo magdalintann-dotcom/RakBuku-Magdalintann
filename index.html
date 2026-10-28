@@ -14,6 +14,7 @@ var LINK_BUKU   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSPiDcTPV4n6T
 var LINK_INFO   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSPiDcTPV4n6TUFpNBI-THHJhxwziMRq5ZSJnUDviFQUMAJJUiXWAEuyimclJ9k3JNxmUAieZRD8xg4/pub?gid=2133869376&single=true&output=csv";   // tab "Info"   (wajib)
 var LINK_JADWAL = "";   // tab "Jadwal COD Buku di Jogja" (boleh dikosongkan)
 var JUDUL_JADWAL = "Jadwal COD di Jogja";
+var LINK_FORM   = "https://script.google.com/macros/s/AKfycbyN30U88xdlzitDOLPhxOc2UStKuhWBy2NIx_EucdnDQYXCSFEu7FGJTW0p5D38vQOuHA/exec";   // URL Apps Script (Web app) supaya form masuk ke spreadsheet. Kosong = form langsung ke WhatsApp
 </script>
 <style>
 /* Layout: Notion-style page — optional cover, big title, quote, two columns of toggles, contact line,
@@ -173,6 +174,10 @@ textarea.inp{min-height:76px;resize:vertical}
 .small{font-size:12.5px;color:var(--faint);margin:0}
 .primary{border:0;background:#25A244;color:#fff;border-radius:6px;padding:10px 14px;font-size:15px;font-weight:600;width:100%}
 .primary:hover{background:#1E8C3A}
+.primary.sheet{background:var(--ink)}
+.primary.sheet:hover{background:#2A2824}
+.primary:disabled{opacity:.6;cursor:default}
+.result.ok{background:var(--t-green)}
 .err{color:#C4382F;font-size:13.5px;margin:0}
 .result{border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--soft)}
 .result p{margin:0;font-size:14px}
@@ -224,7 +229,7 @@ textarea.inp{min-height:76px;resize:vertical}
   <section id="pinjam" class="formwrap" aria-labelledby="h-form">
     <div class="dbhead" style="display:block">
       <h2 id="h-form">Form Peminjaman</h2>
-      <p class="lead">Pilih buku dari katalog di atas atau ketik di sini, isi datamu, lalu kirim. Pesannya akan terbuka di WhatsApp Intan.</p>
+      <p class="lead" id="formlead">Pilih buku dari katalog di atas atau ketik di sini, isi datamu, lalu kirim. Pesannya akan terbuka di WhatsApp Intan.</p>
     </div>
     <form id="form" novalidate>
       <div class="fields">
@@ -263,7 +268,8 @@ textarea.inp{min-height:76px;resize:vertical}
         <div id="sum"></div>
         <p class="small">Perkiraan saja. Total final dan ketersediaan buku dikonfirmasi Intan lewat WhatsApp.</p>
         <p id="err" class="err" hidden></p>
-        <button class="primary" type="submit">Kirim lewat WhatsApp</button>
+        <input type="text" name="website" id="f-hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+        <button class="primary" type="submit" id="sendbtn">Kirim lewat WhatsApp</button>
         <div id="result" class="result" hidden></div>
       </aside>
     </form>
@@ -539,12 +545,38 @@ textarea.inp{min-height:76px;resize:vertical}
     lines.push("","Aku sudah membaca aturan peminjamannya. Ditunggu konfirmasinya ya!");
     var msg=lines.join("\n");
     var url=R.wa?"https://wa.me/"+R.wa+"?text="+encodeURIComponent(msg):"";
-    if(url)window.open(url,"_blank","noopener");
-    $("result").innerHTML=(url?'<p>WhatsApp seharusnya sudah terbuka dengan pesanmu. Tinggal tekan kirim di sana. Kalau tidak terbuka, <a href="'+esc(url)+'" target="_blank" rel="noopener">klik di sini</a> atau salin pesannya:</p>'
+    if(!LINK_FORM){showWa(msg,url,true);return}
+
+    var payload={name:name,wa:wa,days:d?d.days:"",ambil:kirim?"kirim":"cod",alamat:kirim?addr:"",tanggal:$("f-date").value,
+      catatan:$("f-note").value.trim(),total:d?d.price*n+(R.deposit||0):"",website:$("f-hp").value,
+      books:cart.map(function(c){var b=bookBy(c);return {code:c,title:b?b.title:""}})};
+    var btn=$("sendbtn");btn.disabled=true;btn.textContent="Mengirim…";
+    fetch(LINK_FORM,{method:"POST",body:JSON.stringify(payload)})
+      .then(function(r){return r.json()})
+      .then(function(res){
+        if(!res||!res.ok)throw new Error(res&&res.error||"gagal");
+        $("result").className="result ok";
+        $("result").innerHTML='<p><b>Permintaanmu sudah terkirim ke Intan.</b> Intan akan cek ketersediaan bukunya dan menghubungimu lewat WhatsApp '+esc(wa)+'.</p>'+
+          (url?'<p>Mau langsung ngobrol juga? <a href="'+esc(url)+'" target="_blank" rel="noopener">Chat Intan di WhatsApp</a>.</p>':'');
+        $("result").hidden=false;
+        cart=[];syncCart();
+        ["f-name","f-wa","f-addr","f-note","f-date"].forEach(function(id){$(id).value=""});$("f-agree").checked=false;
+      })
+      .catch(function(){showWa(msg,url,false)})
+      .then(function(){btn.disabled=false;btn.textContent=sendLabel()});
+  });
+  function sendLabel(){return LINK_FORM?"Kirim permintaan":"Kirim lewat WhatsApp"}
+  function showWa(msg,url,open){
+    if(url&&open)window.open(url,"_blank","noopener");
+    $("result").className="result";
+    $("result").innerHTML=(open?"":'<p><b>Formnya belum bisa terkirim otomatis.</b> Kirim lewat WhatsApp saja ya.</p>')+
+      (url?'<p>'+(open?'WhatsApp seharusnya sudah terbuka dengan pesanmu. Tinggal tekan kirim di sana. Kalau tidak terbuka, ':'')+'<a href="'+esc(url)+'" target="_blank" rel="noopener">'+(open?'klik di sini':'Buka WhatsApp Intan')+'</a> atau salin pesannya:</p>'
         :'<p>Salin pesan ini lalu kirim ke '+(contactText?linkify(esc(contactText)):"Intan")+':</p>')+
       '<textarea id="msg" class="inp" readonly>'+esc(msg)+'</textarea><button class="btn" type="button" id="copymsg">Salin pesan</button>';
     $("result").hidden=false;
-  });
+  }
+  $("sendbtn").textContent=sendLabel();
+  if(LINK_FORM){$("sendbtn").classList.add("sheet");$("formlead").textContent="Pilih buku dari katalog di atas atau ketik di sini, isi datamu, lalu kirim. Intan akan menghubungimu lewat WhatsApp untuk konfirmasi.";}
   $("result").addEventListener("click",function(e){
     if(e.target.id!=="copymsg")return;var ta=$("msg");
     try{navigator.clipboard.writeText(ta.value).then(function(){toast("Pesan disalin")},function(){ta.select();toast("Pesan sudah dipilih, tinggal salin")})}catch(err){ta.select()}
